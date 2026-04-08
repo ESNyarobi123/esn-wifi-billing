@@ -104,16 +104,8 @@ async def test_portal_pay_resolves_customer_from_known_device():
     device = SimpleNamespace(customer_id=customer_id)
 
     class _Sess:
-        def __init__(self) -> None:
-            self.n = 0
-
         async def execute(self, _stmt):
-            self.n += 1
-            if self.n == 1:
-                return _ScalarRes(scalar_one_or_none=site)
-            if self.n == 2:
-                return _ScalarRes(scalar_one_or_none=device)
-            raise AssertionError("unexpected execute call")
+            return _ScalarRes(scalar_one_or_none=site)
 
         async def commit(self) -> None:
             pass
@@ -136,25 +128,84 @@ async def test_portal_pay_resolves_customer_from_known_device():
                     currency="TZS",
                     payment_status="pending",
                     provider="clickpesa",
+                    customer_id=customer_id,
                 ),
                 {"checkout_url": "https://checkout.example.com"},
             ),
         )
         with patch("app.api.v1.routes.portal.create_payment_intent", new=pay_mock):
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                response = await ac.post(
-                    "/api/v1/portal/hq/pay",
-                    json={
-                        "plan_id": str(plan_id),
-                        "amount": "1500",
-                        "currency": "TZS",
-                        "hotspot_context": {"mac_address": "aa:bb:cc:dd:ee:01"},
-                    },
-                )
+            with patch(
+                "app.api.v1.routes.portal.resolve_or_create_portal_customer",
+                new=AsyncMock(return_value=(customer_id, "device_mac")),
+            ) as resolve_mock:
+                async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                    response = await ac.post(
+                        "/api/v1/portal/hq/pay",
+                        json={
+                            "plan_id": str(plan_id),
+                            "amount": "1500",
+                            "currency": "TZS",
+                            "hotspot_context": {"mac_address": "aa:bb:cc:dd:ee:01"},
+                        },
+                    )
         assert response.status_code == 200
+        resolve_mock.assert_awaited_once()
         assert pay_mock.await_args.kwargs["customer_id"] == customer_id
+        assert pay_mock.await_args.kwargs["callback_url"] == "http://test/api/v1/payments/webhooks/clickpesa"
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_resolve_or_create_portal_customer_creates_customer_and_device_binding():
+    from app.modules.routers.hotspot_authorization_service import resolve_or_create_portal_customer
+
+    site_id = uuid.uuid4()
+    created_customer_id = uuid.uuid4()
+    added: list[object] = []
+
+    class _Sess:
+        def __init__(self) -> None:
+            self.n = 0
+
+        async def execute(self, _stmt):
+            self.n += 1
+            if self.n == 1:
+                return _ScalarRes(scalar_one_or_none=None)  # device lookup
+            if self.n == 2:
+                return _ScalarRes(all_rows=[])  # phone lookup
+            if self.n == 3:
+                return _ScalarRes(scalar_one_or_none=None)  # upsert device binding lookup
+            raise AssertionError("unexpected execute call")
+
+        def add(self, obj) -> None:
+            added.append(obj)
+
+        async def flush(self) -> None:
+            for obj in added:
+                if getattr(obj, "phone", None) == "255712345678" and getattr(obj, "id", None) is None:
+                    obj.id = created_customer_id
+
+    session = _Sess()
+    customer_id, resolved_by = await resolve_or_create_portal_customer(
+        session,
+        site_id=site_id,
+        customer_id=None,
+        mac_address="aa:bb:cc:dd:ee:01",
+        phone="0712345678",
+        email=None,
+        full_name=None,
+        hostname="Pixel-6a",
+    )
+
+    assert customer_id == created_customer_id
+    assert resolved_by == "created_portal_customer"
+    customer = next(obj for obj in added if getattr(obj, "phone", None) == "255712345678")
+    device = next(obj for obj in added if getattr(obj, "mac_address", None) == "AA:BB:CC:DD:EE:01")
+    assert customer.site_id == site_id
+    assert customer.full_name == "WiFi Guest 5678"
+    assert device.customer_id == created_customer_id
+    assert device.hostname == "Pixel-6a"
 
 
 @pytest.mark.asyncio

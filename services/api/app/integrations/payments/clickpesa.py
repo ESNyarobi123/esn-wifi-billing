@@ -68,6 +68,24 @@ def _unwrap_clickpesa_body(payload: Any) -> Any:
     return payload
 
 
+def _pick_best_payment_record(records: list[dict[str, Any]]) -> dict[str, Any]:
+    if not records:
+        return {}
+
+    def _rank(record: dict[str, Any]) -> tuple[int, str]:
+        outcome = _normalized_outcome_from_status(record.get("status"))
+        priority = {
+            "success": 3,
+            "failure": 2,
+            "pending": 1,
+            "unknown": 0,
+        }.get(outcome, 0)
+        timestamp = str(record.get("updatedAt") or record.get("createdAt") or "")
+        return priority, timestamp
+
+    return max(records, key=_rank)
+
+
 class ClickPesaProvider:
     """Live ClickPesa collection integration: token, preview/initiate USSD push, query, and webhook verification."""
 
@@ -222,8 +240,8 @@ class ClickPesaProvider:
     async def query_payment_status(self, *, order_reference: str) -> dict[str, Any]:
         response = await self._authorized_request("GET", f"/payments/{order_reference}")
         records_raw = _unwrap_clickpesa_body(response.json())
-        records = records_raw if isinstance(records_raw, list) else [records_raw]
-        latest = records[0] if records else {}
+        records = [row for row in (records_raw if isinstance(records_raw, list) else [records_raw]) if isinstance(row, dict)]
+        latest = _pick_best_payment_record(records)
         gateway_status = _normalize_gateway_status(latest.get("status")) if isinstance(latest, dict) else None
         provider_transaction_id = None
         payment_reference = None

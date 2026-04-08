@@ -143,6 +143,47 @@ async def test_clickpesa_query_payment_status_normalizes(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_clickpesa_query_payment_status_prefers_successful_record(monkeypatch):
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_api_base_url", "https://api.clickpesa.com")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_client_id", "client-1")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_api_key", "api-key-1")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_client_secret", "")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/third-parties/generate-token":
+            return httpx.Response(200, json={"token": "provider-token"})
+        if request.url.path == "/third-parties/payments/ORD-2B":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "cp-pending",
+                        "status": "PENDING",
+                        "paymentReference": "PAY-PENDING",
+                        "orderReference": "ORD-2B",
+                        "updatedAt": "2026-04-08T10:00:00.000Z",
+                    },
+                    {
+                        "id": "cp-success",
+                        "status": "SUCCESS",
+                        "paymentReference": "PAY-SUCCESS",
+                        "orderReference": "ORD-2B",
+                        "updatedAt": "2026-04-08T10:01:00.000Z",
+                    },
+                ],
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    provider = ClickPesaProvider(transport=httpx.MockTransport(handler))
+    result = await provider.query_payment_status(order_reference="ORD-2B")
+
+    assert result["gateway_status"] == "SUCCESS"
+    assert result["normalized_outcome"] == "success"
+    assert result["provider_transaction_id"] == "cp-success"
+    assert result["payment_reference"] == "PAY-SUCCESS"
+
+
+@pytest.mark.asyncio
 async def test_clickpesa_tzs_amount_normalized_to_whole_string(monkeypatch):
     monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_enabled", True)
     monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_api_base_url", "https://api.clickpesa.com")

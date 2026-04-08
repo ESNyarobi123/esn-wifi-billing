@@ -16,12 +16,14 @@ from app.core.rate_limit.deps import (
 )
 from app.core.responses import ok
 from app.db.enums import RecordStatus, SessionStatus
-from app.modules.payments.service import create_payment_intent
+from app.modules.payments.models import Payment
+from app.modules.payments.service import create_payment_intent, refresh_payment_status_from_provider
 from app.modules.plans.models import Plan, PlanRouterAvailability
 from app.modules.portal.models import PortalBranding
 from app.modules.routers.hotspot_authorization_service import (
     authorize_best_portal_access,
     build_hotspot_device_context,
+    resolve_or_create_portal_customer,
     resolve_portal_customer_id,
 )
 from app.modules.routers.models import Router, Site
@@ -159,23 +161,29 @@ async def portal_plans(session: DbSession, site_slug: str):
 async def portal_initiate_payment(
     session: DbSession,
     site_slug: str,
+    request: Request,
     body: PortalPayBody = Depends(portal_rate_limit_pay_body),
 ):
     site = (await session.execute(select(Site).where(Site.slug == site_slug))).scalar_one_or_none()
     if site is None or site.status == RecordStatus.deleted.value:
         raise NotFoundError("Site not found")
     context = build_hotspot_device_context(body.hotspot_context)
-    resolved_customer_id, _resolved_by = await resolve_portal_customer_id(
+    resolved_customer_id, resolved_by = await resolve_or_create_portal_customer(
         session,
         site_id=site.id,
         customer_id=body.customer_id,
         mac_address=context.mac_address if context else None,
+        phone=body.phone,
+        email=str(body.email) if body.email else None,
+        full_name=body.full_name,
+        hostname=context.identity if context else None,
     )
     customer_payload = {
         "customerName": body.full_name or "",
         "customerEmail": body.email or "",
         "customerPhoneNumber": body.phone or "",
     }
+    cb_base = str(request.base_url).rstrip("/")
     pay, prov = await create_payment_intent(
         session,
         provider=settings.default_payment_provider,
@@ -186,10 +194,11 @@ async def portal_initiate_payment(
         site_id=site.id,
         voucher_batch_id=None,
         customer_payload=customer_payload,
-        callback_url=None,
+        callback_url=cb_base + settings.clickpesa_webhook_path,
         metadata={
             "portal_site": site.slug,
             "hotspot_context": body.hotspot_context,
+            "portal_customer_resolution": resolved_by,
         },
     )
     payment = {
@@ -199,11 +208,14 @@ async def portal_initiate_payment(
         "currency": pay.currency,
         "status": pay.payment_status,
         "provider": pay.provider,
+        "customer_id": str(pay.customer_id) if pay.customer_id else None,
     }
     return ok(
         {
             "payment_id": str(pay.id),
             "order_reference": pay.order_reference,
+            "customer_id": str(pay.customer_id) if pay.customer_id else None,
+            "resolved_by": resolved_by,
             "payment": payment,
             "checkout": prov,
             "provider": prov,
@@ -373,3 +385,32 @@ async def portal_session_status(
             },
         },
     )
+
+
+@router.post(
+    "/portal/{site_slug}/payments/{payment_id}/refresh-status",
+    dependencies=[Depends(portal_rate_limit_access_status)],
+    summary="Refresh portal payment status",
+)
+async def portal_refresh_payment_status(
+    session: DbSession,
+    site_slug: str,
+    payment_id: uuid.UUID,
+):
+    site = (await session.execute(select(Site).where(Site.slug == site_slug))).scalar_one_or_none()
+    if site is None or site.status == RecordStatus.deleted.value:
+        raise NotFoundError("Site not found")
+
+    pay = (
+        await session.execute(
+            select(Payment).where(
+                Payment.id == payment_id,
+                Payment.site_id == site.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if pay is None:
+        raise NotFoundError("Payment not found")
+
+    result = await refresh_payment_status_from_provider(session, pay)
+    return ok(result, message="Provider status refreshed")

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -14,7 +15,8 @@ import {
   setStoredPortalPhone,
 } from "@/lib/portal/customer-storage";
 import { getStoredHotspotContext } from "@/lib/portal/hotspot-context";
-import { hotspotContextToPayload } from "@/lib/portal/router-auth";
+import { hotspotContextToPayload, submitHotspotLogin } from "@/lib/portal/router-auth";
+import type { PortalAuthorization } from "@/lib/portal/router-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,41 @@ import { Label } from "@/components/ui/label";
 import { PortalCustomerBanner } from "@/components/portal/portal-customer-banner";
 import { PortalInlineError } from "@/components/portal/portal-inline-error";
 import { formatMoney } from "@/lib/format";
+
+type PortalPaymentRefresh = {
+  payment_id: string;
+  order_reference: string;
+  gateway_status: string | null;
+  normalized_outcome: string;
+  payment_status: string;
+  activation?: {
+    activated?: boolean;
+    grant_id?: string | null;
+    authorization?: {
+      available: boolean;
+      login_url?: string | null;
+      username?: string | null;
+      password?: string | null;
+      router_name?: string | null;
+      rate_limit?: string | null;
+      reason?: string | null;
+    } | null;
+  } | null;
+};
+
+function toPortalAuthorization(
+  auth: NonNullable<NonNullable<PortalPaymentRefresh["activation"]>["authorization"]>,
+): PortalAuthorization {
+  return {
+    available: auth.available,
+    login_url: auth.login_url ?? undefined,
+    username: auth.username ?? undefined,
+    password: auth.password ?? undefined,
+    router_name: auth.router_name ?? undefined,
+    rate_limit: auth.rate_limit ?? undefined,
+    reason: auth.reason ?? undefined,
+  };
+}
 
 function PortalPayInner({ siteSlug }: { siteSlug: string }) {
   const search = useSearchParams();
@@ -42,10 +79,14 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
   const [checkout, setCheckout] = useState<{
     payment_id?: string;
     order_reference?: string;
+    customer_id?: string | null;
+    resolved_by?: string | null;
     payment?: Record<string, unknown>;
     checkout?: Record<string, unknown>;
     provider?: Record<string, unknown>;
   } | null>(null);
+  const [paymentRefresh, setPaymentRefresh] = useState<PortalPaymentRefresh | null>(null);
+  const [paymentRefreshNote, setPaymentRefreshNote] = useState<string | null>(null);
   const [detectedMac, setDetectedMac] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +124,8 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
     }
     setBusy(true);
     setCheckout(null);
+    setPaymentRefresh(null);
+    setPaymentRefreshNote(null);
     try {
       const hotspotContext = hotspotContextToPayload(getStoredHotspotContext(siteSlug));
       const body = {
@@ -98,11 +141,18 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
       const res = await apiPostPublic<{
         payment_id: string;
         order_reference: string;
+        customer_id?: string | null;
+        resolved_by?: string | null;
         checkout: Record<string, unknown>;
         payment?: Record<string, unknown>;
         provider?: Record<string, unknown>;
       }>(`/portal/${siteSlug}/pay`, body);
-      if (customerId.trim()) setStoredCustomerId(siteSlug, customerId.trim());
+      if (res.customer_id) {
+        setStoredCustomerId(siteSlug, res.customer_id);
+        setCustomerId(res.customer_id);
+      } else if (customerId.trim()) {
+        setStoredCustomerId(siteSlug, customerId.trim());
+      }
       setStoredPortalPhone(siteSlug, phone.trim());
       setCheckout(res);
       toast.success("Payment started. Confirm the prompt on your phone to continue.");
@@ -112,6 +162,62 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!checkout?.payment_id) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    let successHandled = false;
+
+    const pollStatus = async () => {
+      attempts += 1;
+      try {
+        const result = await apiPostPublic<PortalPaymentRefresh>(`/portal/${siteSlug}/payments/${checkout.payment_id}/refresh-status`);
+        if (cancelled) return;
+        setPaymentRefresh(result);
+        setPaymentRefreshNote(null);
+
+        if (result.payment_status === "success") {
+          successHandled = true;
+          const authorization = result.activation?.authorization;
+          toast.success("Payment confirmed. Finishing your Wi-Fi access now.");
+          if (authorization?.available && authorization.login_url && authorization.username && authorization.password) {
+            timer = setTimeout(() => submitHotspotLogin(toPortalAuthorization(authorization)), 600);
+            return;
+          }
+          return;
+        }
+
+        if (result.payment_status === "failed" || result.normalized_outcome === "failure") {
+          successHandled = true;
+          setPaymentRefreshNote("Payment was not confirmed. Please try again or ask for support.");
+          toast.error("Payment was not confirmed.");
+          return;
+        }
+      } catch (error) {
+        if (cancelled) return;
+        if (attempts >= 18) {
+          setPaymentRefreshNote(userFacingApiMessage(error));
+        }
+      }
+
+      if (attempts >= 18 || successHandled) {
+        if (!successHandled && !paymentRefreshNote) {
+          setPaymentRefreshNote("Still waiting for ClickPesa confirmation. Keep this page open for a little longer, or open Access to retry.");
+        }
+        return;
+      }
+      timer = setTimeout(pollStatus, 5000);
+    };
+
+    timer = setTimeout(pollStatus, 4000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [checkout?.payment_id, siteSlug]);
 
   if (plansQ.error) {
     const err = plansQ.error as Error;
@@ -266,14 +372,57 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
                   Order reference: <span className="font-mono text-white">{checkout.order_reference}</span>
                 </p>
               )}
+              {checkout.resolved_by && (
+                <p className="mt-2 text-xs text-white/60">Customer resolution: {checkout.resolved_by}</p>
+              )}
             </div>
-            <p className="mt-3 text-sm text-white/75">
-              After payment succeeds, open <strong>Access</strong> on this same device to finish connecting this hotspot automatically.
-            </p>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+              <p className="font-medium text-white">Live status</p>
+              <p className="mt-2">
+                {paymentRefresh?.payment_status === "success"
+                  ? "Payment confirmed. We’re finishing hotspot access for this device."
+                  : paymentRefresh?.payment_status === "failed"
+                    ? "Payment failed or was reversed."
+                    : "Waiting for provider confirmation from ClickPesa…"}
+              </p>
+              {paymentRefresh?.gateway_status && (
+                <p className="mt-2 text-xs text-white/60">
+                  Provider status: <span className="font-mono text-white">{paymentRefresh.gateway_status}</span>
+                </p>
+              )}
+              {paymentRefresh?.activation?.authorization?.available &&
+                paymentRefresh.activation.authorization.login_url &&
+                paymentRefresh.activation.authorization.username &&
+                paymentRefresh.activation.authorization.password && (
+                  <Button
+                    type="button"
+                    className="mt-3 min-h-11 text-slate-900"
+                    style={{ backgroundColor: "var(--portal-accent)" }}
+                    onClick={() => submitHotspotLogin(toPortalAuthorization(paymentRefresh.activation!.authorization!))}
+                  >
+                    Connect this device
+                  </Button>
+                )}
+              {paymentRefreshNote && (
+                <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-white/80">
+                  {paymentRefreshNote}{" "}
+                  <Link href={`/${siteSlug}/access`} className="underline underline-offset-2">
+                    Open Access
+                  </Link>
+                </div>
+              )}
+            </div>
             <details className="rounded-xl border border-white/10 bg-black/25 p-4">
               <summary className="cursor-pointer text-sm font-medium text-white">Support details</summary>
               <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-black/40 p-3 text-xs">
-                {JSON.stringify(checkout.checkout ?? checkout.provider ?? checkout, null, 2)}
+                {JSON.stringify(
+                  {
+                    initiated: checkout.checkout ?? checkout.provider ?? checkout,
+                    latest_status: paymentRefresh,
+                  },
+                  null,
+                  2,
+                )}
               </pre>
             </details>
           </CardContent>

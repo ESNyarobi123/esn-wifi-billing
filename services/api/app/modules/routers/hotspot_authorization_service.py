@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,12 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.enums import AccessGrantStatus
+from app.db.enums import AccessGrantStatus, AccountStatus, RecordStatus
 from app.integrations.mikrotik.commands import build_rate_limit, normalize_mac
 from app.integrations.mikrotik.errors import MikrotikIntegrationError
 from app.integrations.mikrotik.factory import get_mikrotik_adapter
 from app.integrations.mikrotik.results import nas_fail, nas_ok
-from app.modules.customers.models import CustomerDevice
+from app.modules.customers.models import Customer, CustomerDevice
 from app.modules.plans.models import Plan
 from app.modules.routers.models import Router, Site
 from app.modules.subscriptions.models import CustomerAccessGrant
@@ -56,6 +57,31 @@ def build_hotspot_device_context(raw: dict[str, Any] | None) -> HotspotDeviceCon
         identity=str(raw.get("identity") or raw.get("hs_identity") or "").strip() or None,
         original_destination=str(raw.get("original_destination") or raw.get("hs_dst") or "").strip() or None,
     )
+
+
+def normalize_portal_customer_phone(raw: str | None) -> str | None:
+    digits = re.sub(r"\D", "", raw or "")
+    if not digits:
+        return None
+    if digits.startswith("255") and len(digits) == 12:
+        return digits
+    if digits.startswith("0") and len(digits) == 10:
+        return f"255{digits[1:]}"
+    return digits
+
+
+def normalize_portal_customer_email(raw: str | None) -> str | None:
+    email = str(raw or "").strip().lower()
+    return email or None
+
+
+def _portal_customer_name(*, full_name: str | None, phone: str | None) -> str:
+    cleaned = str(full_name or "").strip()
+    if cleaned:
+        return cleaned
+    if phone:
+        return f"WiFi Guest {phone[-4:]}"
+    return "WiFi Guest"
 
 
 def build_hotspot_username(*, grant_id: uuid.UUID, mac_address: str) -> str:
@@ -135,6 +161,102 @@ async def resolve_portal_customer_id(
     if device is None:
         return None, None
     return device.customer_id, "device_mac"
+
+
+async def resolve_or_create_portal_customer(
+    session: AsyncSession,
+    *,
+    site_id: uuid.UUID,
+    customer_id: uuid.UUID | None,
+    mac_address: str | None,
+    phone: str | None,
+    email: str | None,
+    full_name: str | None,
+    hostname: str | None = None,
+) -> tuple[uuid.UUID | None, str | None]:
+    normalized_phone = normalize_portal_customer_phone(phone)
+    normalized_email = normalize_portal_customer_email(email)
+
+    resolved_customer_id, resolved_by = await resolve_portal_customer_id(
+        session,
+        site_id=site_id,
+        customer_id=customer_id,
+        mac_address=mac_address,
+    )
+
+    customer: Customer | None = None
+    if resolved_customer_id:
+        customer = (await session.execute(select(Customer).where(Customer.id == resolved_customer_id))).scalar_one_or_none()
+
+    if customer is None and normalized_phone:
+        phone_matches = (
+            await session.execute(
+                select(Customer)
+                .where(
+                    Customer.site_id == site_id,
+                    Customer.phone == normalized_phone,
+                    Customer.status != RecordStatus.deleted.value,
+                )
+                .order_by(Customer.created_at.desc()),
+            )
+        ).scalars().all()
+        customer = phone_matches[0] if phone_matches else None
+        if customer is not None:
+            resolved_customer_id = customer.id
+            resolved_by = "phone"
+
+    if customer is None and normalized_email:
+        email_matches = (
+            await session.execute(
+                select(Customer)
+                .where(
+                    Customer.site_id == site_id,
+                    Customer.email == normalized_email,
+                    Customer.status != RecordStatus.deleted.value,
+                )
+                .order_by(Customer.created_at.desc()),
+            )
+        ).scalars().all()
+        customer = email_matches[0] if email_matches else None
+        if customer is not None:
+            resolved_customer_id = customer.id
+            resolved_by = "email"
+
+    if customer is None and any([normalized_phone, normalized_email, str(full_name or "").strip()]):
+        customer = Customer(
+            site_id=site_id,
+            phone=normalized_phone,
+            email=normalized_email,
+            full_name=_portal_customer_name(full_name=full_name, phone=normalized_phone),
+            account_status=AccountStatus.active.value,
+        )
+        session.add(customer)
+        await session.flush()
+        resolved_customer_id = customer.id
+        resolved_by = "created_portal_customer"
+
+    if customer is not None:
+        if normalized_phone and not customer.phone:
+            customer.phone = normalized_phone
+        if normalized_email and not customer.email:
+            customer.email = normalized_email
+        if full_name and not str(customer.full_name or "").strip():
+            customer.full_name = str(full_name).strip()
+        if customer.site_id is None:
+            customer.site_id = site_id
+        resolved_customer_id = customer.id
+
+    mac = normalize_mac(mac_address)
+    if resolved_customer_id and mac:
+        await upsert_customer_device_binding(
+            session,
+            customer_id=resolved_customer_id,
+            site_id=site_id,
+            mac_address=mac,
+            hostname=hostname,
+        )
+
+    return resolved_customer_id, resolved_by
 
 
 async def resolve_site_router(session: AsyncSession, *, site: Site, context: HotspotDeviceContext) -> Router | None:
