@@ -11,6 +11,7 @@ import pytest
 from app.integrations.payments.checksum import clickpesa_payload_checksum
 from app.integrations.payments.clickpesa import ClickPesaProvider
 from app.integrations.payments.errors import normalize_provider_http_error
+from app.modules.payments.service import _order_ref
 from app.modules.payments.service import refresh_payment_status_from_provider
 
 
@@ -187,6 +188,13 @@ def test_normalize_provider_http_error_includes_response_message():
     assert normalized.message == "Provider HTTP 400: Invalid phone number"
     assert normalized.details["status_code"] == 400
     assert normalized.details["provider_message"] == "Invalid phone number"
+
+
+def test_order_ref_is_alphanumeric_for_clickpesa():
+    ref = _order_ref()
+
+    assert ref.startswith("ESN")
+    assert ref.isalnum()
 
 
 @pytest.mark.asyncio

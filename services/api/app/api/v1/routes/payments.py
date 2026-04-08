@@ -194,7 +194,7 @@ async def initiate_payment_route(
                             "value": {
                                 "event": "PAYMENT RECEIVED",
                                 "data": {
-                                    "orderReference": "ESN-A1B2C3D4",
+                                    "orderReference": "ESNA1B2C3D4",
                                     "status": "SUCCESS",
                                     "transactionId": "TX-1",
                                 },

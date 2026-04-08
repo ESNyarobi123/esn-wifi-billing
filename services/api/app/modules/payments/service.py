@@ -26,7 +26,7 @@ from app.modules.vouchers.models import Voucher, VoucherBatch
 
 
 def _order_ref() -> str:
-    return f"ESN-{secrets.token_hex(8).upper()}"
+    return f"ESN{secrets.token_hex(8).upper()}"
 
 
 async def create_payment_intent(
