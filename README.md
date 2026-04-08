@@ -35,3 +35,7 @@ See nested `README.md` files in `apps/web` and `services/api` for stack-specific
 The web app ships as a **standalone** Node bundle (`server.js` under `.next/standalone/`). Build/run and Docker notes live in [`apps/web/docs/STAGING.md`](apps/web/docs/STAGING.md).
 
 **Release candidate / UAT:** [`docs/UAT_CHECKLIST.md`](docs/UAT_CHECKLIST.md) (manual flows), [`docs/RELEASE_CANDIDATE.md`](docs/RELEASE_CANDIDATE.md) (env, migrations, rollback, known limitations). From `apps/web`: `npm run staging:smoke` against your deployed `BASE_URL` (+ optional `API_PUBLIC_URL`).
+
+**Production VPS + router onboarding:** [`docs/VPS_PRODUCTION_AND_ROUTER_ONBOARDING.md`](docs/VPS_PRODUCTION_AND_ROUTER_ONBOARDING.md) — public domain setup, env checklist, and end-to-end MikroTik provisioning flow.
+
+**Spotbox runbook (Swahili):** [`docs/SPOTBOX_REMOTE_ROUTER_RUNBOOK_SW.md`](docs/SPOTBOX_REMOTE_ROUTER_RUNBOOK_SW.md) and [`docs/SPOTBOX_REMOTE_ROUTER_RUNBOOK_SW.docx`](docs/SPOTBOX_REMOTE_ROUTER_RUNBOOK_SW.docx) — VPS, WireGuard, remote router onboarding, provisioning, and troubleshooting.

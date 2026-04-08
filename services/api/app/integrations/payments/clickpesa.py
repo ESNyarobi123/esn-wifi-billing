@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
 import httpx
@@ -25,6 +26,24 @@ def _normalize_phone_number(raw: str | None) -> str:
     if digits.startswith("0") and len(digits) == 10:
         return f"255{digits[1:]}"
     raise ValidationAppError("ClickPesa requires a valid phone number in Tanzania country-code format, e.g. 255712345678.")
+
+
+def _normalize_collection_amount(raw: str | Decimal | int | float, *, currency: str) -> str:
+    try:
+        amount = Decimal(str(raw))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValidationAppError("ClickPesa requires a valid amount.") from exc
+
+    if amount <= 0:
+        raise ValidationAppError("ClickPesa amount must be greater than zero.")
+
+    if str(currency).strip().upper() == "TZS":
+        if amount != amount.to_integral_value():
+            raise ValidationAppError("ClickPesa TZS payments must use whole shilling amounts.")
+        return str(int(amount))
+
+    normalized = format(amount.normalize(), "f")
+    return normalized.rstrip("0").rstrip(".") if "." in normalized else normalized
 
 
 def _normalize_gateway_status(raw: str | None) -> str | None:
@@ -137,11 +156,12 @@ class ClickPesaProvider:
             raise ValidationAppError("ClickPesa USSD push currently supports TZS only.")
 
         phone_number = _normalize_phone_number(customer.get("customerPhoneNumber"))
+        normalized_amount = _normalize_collection_amount(amount, currency=currency)
         token = await self._generate_token()
 
         preview_payload = self._with_checksum(
             {
-                "amount": str(amount),
+                "amount": normalized_amount,
                 "currency": "TZS",
                 "orderReference": order_reference,
                 "phoneNumber": phone_number,
@@ -158,7 +178,7 @@ class ClickPesaProvider:
 
         initiate_payload = self._with_checksum(
             {
-                "amount": str(amount),
+                "amount": normalized_amount,
                 "currency": "TZS",
                 "orderReference": order_reference,
                 "phoneNumber": phone_number,

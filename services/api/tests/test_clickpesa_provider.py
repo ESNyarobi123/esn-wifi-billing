@@ -10,6 +10,7 @@ import pytest
 
 from app.integrations.payments.checksum import clickpesa_payload_checksum
 from app.integrations.payments.clickpesa import ClickPesaProvider
+from app.integrations.payments.errors import normalize_provider_http_error
 from app.modules.payments.service import refresh_payment_status_from_provider
 
 
@@ -138,6 +139,54 @@ async def test_clickpesa_query_payment_status_normalizes(monkeypatch):
     assert result["normalized_outcome"] == "success"
     assert result["provider_transaction_id"] == "cp-2"
     assert result["payment_reference"] == "PAY-2"
+
+
+@pytest.mark.asyncio
+async def test_clickpesa_tzs_amount_normalized_to_whole_string(monkeypatch):
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_enabled", True)
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_api_base_url", "https://api.clickpesa.com")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_client_id", "client-1")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_api_key", "api-key-1")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_client_secret", "")
+    monkeypatch.setattr("app.integrations.payments.clickpesa.settings.clickpesa_checksum_key", "")
+
+    seen_amounts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode()) if request.content else None
+        if request.url.path == "/third-parties/generate-token":
+            return httpx.Response(200, json={"token": "provider-token"})
+        if request.url.path == "/third-parties/payments/preview-ussd-push-request":
+            seen_amounts.append(body["amount"])
+            return httpx.Response(200, json={"data": {"activeMethods": ["MPESA"]}})
+        if request.url.path == "/third-parties/payments/initiate-ussd-push-request":
+            seen_amounts.append(body["amount"])
+            return httpx.Response(200, json={"data": {"id": "cp-1", "status": "PROCESSING"}})
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    provider = ClickPesaProvider(transport=httpx.MockTransport(handler))
+    await provider.initiate_payment(
+        order_reference="ORD-100",
+        amount="1000.00",
+        currency="TZS",
+        customer={"customerPhoneNumber": "0712345678"},
+        callback_url=None,
+        metadata=None,
+    )
+
+    assert seen_amounts == ["1000", "1000"]
+
+
+def test_normalize_provider_http_error_includes_response_message():
+    request = httpx.Request("POST", "https://api.clickpesa.com/third-parties/payments/initiate-ussd-push-request")
+    response = httpx.Response(400, request=request, json={"message": "Invalid phone number"})
+    exc = httpx.HTTPStatusError("bad request", request=request, response=response)
+
+    normalized = normalize_provider_http_error(exc, provider="clickpesa")
+
+    assert normalized.message == "Provider HTTP 400: Invalid phone number"
+    assert normalized.details["status_code"] == 400
+    assert normalized.details["provider_message"] == "Invalid phone number"
 
 
 @pytest.mark.asyncio
