@@ -48,7 +48,7 @@ async def test_clickpesa_initiate_payment_live_flow(monkeypatch):
                 },
             )
             assert body["checksum"] == expected
-            assert body["checksumMethod"] == "HMAC_SHA256"
+            assert body["checksumMethod"] == "canonical"
             return httpx.Response(
                 200,
                 json={

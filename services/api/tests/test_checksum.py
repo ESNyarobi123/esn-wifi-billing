@@ -15,5 +15,5 @@ def test_verify_checksum():
     # build expected from stripped payload
     stripped = {k: v for k, v in payload.items() if k not in ("checksum", "checksumMethod")}
     expected = clickpesa_payload_checksum(key, stripped)
-    full = {"event": "X", "a": 1, "checksum": expected, "checksumMethod": "HMAC_SHA256"}
+    full = {"event": "X", "a": 1, "checksum": expected, "checksumMethod": "canonical"}
     assert verify_clickpesa_checksum(key, full, expected=full["checksum"]) is True

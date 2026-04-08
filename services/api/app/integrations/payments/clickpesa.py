@@ -98,7 +98,7 @@ class ClickPesaProvider:
             return payload
         body = dict(payload)
         body["checksum"] = clickpesa_payload_checksum(key, body)
-        body["checksumMethod"] = "HMAC_SHA256"
+        body["checksumMethod"] = "canonical"
         return body
 
     async def _generate_token(self) -> str:
