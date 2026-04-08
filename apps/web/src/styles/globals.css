@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ESN brand: Bright Orange #FBA002, Deep Olive #313B2F */
+@layer base {
+  :root {
+    --esn-orange: 37 99% 50%;
+    --esn-olive: 100 11% 21%;
+    --esn-olive-light: 100 9% 32%;
+    --background: 100 12% 97%;
+    --foreground: 100 25% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 100 25% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 100 25% 8%;
+    --primary: 37 99% 50%;
+    --primary-foreground: 100 25% 8%;
+    --secondary: 100 9% 94%;
+    --secondary-foreground: 100 25% 12%;
+    --muted: 100 8% 92%;
+    --muted-foreground: 100 6% 40%;
+    --accent: 37 95% 94%;
+    --accent-foreground: 100 25% 12%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 100 8% 88%;
+    --input: 100 8% 88%;
+    --ring: 37 99% 50%;
+    --radius: 0.65rem;
+    --sidebar: 100 14% 12%;
+    --sidebar-foreground: 100 10% 92%;
+    --chart-1: 37 99% 50%;
+    --chart-2: 100 20% 45%;
+    --chart-3: 200 60% 45%;
+    --chart-4: 280 45% 55%;
+    --chart-5: 25 85% 48%;
+  }
+  .dark {
+    --background: 100 14% 8%;
+    --foreground: 100 10% 96%;
+    --card: 100 12% 11%;
+    --card-foreground: 100 10% 96%;
+    --popover: 100 12% 11%;
+    --popover-foreground: 100 10% 96%;
+    --primary: 37 99% 53%;
+    --primary-foreground: 100 25% 8%;
+    --secondary: 100 10% 16%;
+    --secondary-foreground: 100 10% 92%;
+    --muted: 100 10% 18%;
+    --muted-foreground: 100 8% 62%;
+    --accent: 100 10% 18%;
+    --accent-foreground: 100 10% 96%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 100 10% 20%;
+    --input: 100 10% 20%;
+    --ring: 37 99% 53%;
+    --sidebar: 100 16% 6%;
+    --sidebar-foreground: 100 10% 92%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

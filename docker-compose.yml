@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-esn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-esn_dev_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-esn_wifi}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-esn} -d ${POSTGRES_DB:-esn_wifi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-esn}:${POSTGRES_PASSWORD:-esn_dev_change_me}@postgres:5432/${POSTGRES_DB:-esn_wifi}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Real staging: include every browser origin (scheme + host + port), comma-separated.
+      CORS_ORIGINS: http://192.168.88.254:3000,http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/api/app:/app/app:ro
+
+  worker:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -l info
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-esn}:${POSTGRES_PASSWORD:-esn_dev_change_me}@postgres:5432/${POSTGRES_DB:-esn_wifi}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/api/app:/app/app:ro
+
+  beat:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app beat -l info
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-esn}:${POSTGRES_PASSWORD:-esn_dev_change_me}@postgres:5432/${POSTGRES_DB:-esn_wifi}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/api/app:/app/app:ro
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle; must match how the *browser* reaches the API from the host.
+        NEXT_PUBLIC_API_URL: http://192.168.88.254:8000
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://192.168.88.254:8000
+      # SSR / server-side fetches from inside this container (portal branding, etc.)
+      INTERNAL_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:

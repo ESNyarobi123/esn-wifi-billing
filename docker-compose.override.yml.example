@@ -1,0 +1,24 @@
+# Copy to docker-compose.override.yml for local-only tweaks (gitignored).
+# Example: mount live API code without :ro, expose extra ports, or add admin tools.
+
+services:
+  api:
+    volumes:
+      - ./services/api/app:/app/app
+    environment:
+      API_ENV: development
+
+  worker:
+    volumes:
+      - ./services/api/app:/app/app
+
+  beat:
+    volumes:
+      - ./services/api/app:/app/app
+
+  web:
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/public:/app/public
+    environment:
+      WATCHPACK_POLLING: "true"
