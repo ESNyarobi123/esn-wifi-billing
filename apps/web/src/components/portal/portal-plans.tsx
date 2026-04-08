@@ -14,7 +14,13 @@ import { PortalCustomerBanner } from "@/components/portal/portal-customer-banner
 import { PortalInlineError } from "@/components/portal/portal-inline-error";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function PortalPlans({ siteSlug }: { siteSlug: string }) {
+export function PortalPlans({
+  siteSlug,
+  embedded = false,
+}: {
+  siteSlug: string;
+  embedded?: boolean;
+}) {
   const reduceMotion = useReducedMotion();
   const q = useQuery({
     queryKey: ["portal-plans", siteSlug],
@@ -38,7 +44,7 @@ export function PortalPlans({ siteSlug }: { siteSlug: string }) {
 
   return (
     <div className="space-y-6">
-      <PortalCustomerBanner siteSlug={siteSlug} />
+      {!embedded && <PortalCustomerBanner siteSlug={siteSlug} />}
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Choose a plan</h1>
         <p className="mt-2 max-w-xl text-pretty text-sm text-white/75">Tap any plan, enter your phone number, and pay.</p>
@@ -91,6 +97,18 @@ export function PortalPlans({ siteSlug }: { siteSlug: string }) {
         <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70" role="status">
           No plans are available here yet. Ask staff or try again later.
         </p>
+      )}
+      {embedded && (
+        <Button
+          asChild
+          variant="outline"
+          className="min-h-[3.25rem] w-full flex-col gap-1 border-white/25 bg-white/5 py-6 text-base text-white hover:bg-white/10 sm:min-h-[3.5rem]"
+        >
+          <Link href={`${base}/redeem`}>
+            Redeem voucher
+            <span className="text-xs font-normal text-white/65">Use this if you already have a voucher code</span>
+          </Link>
+        </Button>
       )}
     </div>
   );

@@ -1,13 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Radio } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Radio } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PortalCustomerBanner } from "@/components/portal/portal-customer-banner";
 import { PortalInlineError } from "@/components/portal/portal-inline-error";
+import { PortalPlans } from "@/components/portal/portal-plans";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGetPublic, ApiRequestError } from "@/lib/api/client";
 import { isRateLimitedError, userFacingApiMessage } from "@/lib/api/error-utils";
@@ -27,8 +26,6 @@ export function PortalHome({ siteSlug }: { siteSlug: string }) {
       return n < 2;
     },
   });
-
-  const base = `/${siteSlug}`;
 
   if (q.error) {
     const err = q.error as Error;
@@ -84,36 +81,7 @@ export function PortalHome({ siteSlug }: { siteSlug: string }) {
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Button
-          asChild
-          className="min-h-[3.25rem] w-full flex-col gap-1 py-6 text-base font-semibold shadow-lg sm:min-h-[3.5rem]"
-          style={{ backgroundColor: "var(--portal-accent)", color: "#141816" }}
-        >
-          <Link href={`${base}/plans`}>
-            View plans
-            <span className="text-xs font-normal opacity-85">Compare prices &amp; speeds</span>
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          className="min-h-[3.25rem] w-full flex-col gap-1 border-white/25 bg-white/5 py-6 text-base text-white hover:bg-white/10 sm:min-h-[3.5rem]"
-        >
-          <Link href={`${base}/redeem`}>
-            Redeem voucher
-            <span className="text-xs font-normal text-white/65">Needs customer ID</span>
-          </Link>
-        </Button>
-      </div>
-
-      <div className="flex justify-center pt-2">
-        <Button variant="ghost" className="min-h-11 gap-2 text-[var(--portal-accent)] hover:bg-white/5 hover:text-white" asChild>
-          <Link href={`${base}/pay`}>
-            Pay for access <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
-          </Link>
-        </Button>
-      </div>
+      <PortalPlans siteSlug={siteSlug} embedded />
     </div>
   );
 }
