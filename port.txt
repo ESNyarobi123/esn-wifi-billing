@@ -1,0 +1,77 @@
+Sasa picha iko wazi kabisa.
+
+Hali ya sasa ni hii:
+
+bridge = LAN ya kawaida
+bridge-hotspot = guest hotspot
+ether2, ether3, ether4, ether5, na wlan2 bado ziko kwenye bridge ya kawaida
+bridge-hotspot bado haina hizo ports
+Ndiyo maana ulipojaribu kuongeza port kwenye bridge-hotspot, MikroTik akasema:
+
+device already added as bridge port
+Uamuzi salama
+Usihamishe ports zote mara moja.
+Chagua port moja au mbili za guest/AP tu, mfano:
+
+ether3 kwa AP ya hotspot
+au ether4 kwa cable guest
+Kwa sababu ukiihamisha port kutoka bridge kwenda bridge-hotspot, hiyo port:
+
+itaacha kuwa LAN ya kawaida
+itakuwa guest network yenye portal
+Mfano salama sana
+Kama unataka AP extender uiunganishe kwenye ether3, run hizi:
+
+/interface bridge port remove [find where interface="ether3"]
+/interface bridge port add bridge="bridge-hotspot" interface="ether3"
+Baada ya hapo:
+
+chomeka AP kwenye ether3
+AP iwe Access Point/Bridge mode
+DHCP OFF
+NAT OFF
+tumia LAN port, si WAN port
+Na clients wa hiyo AP wataenda portal.
+
+Kama unataka pia port ya cable kwa guests
+Mfano ether4:
+
+/interface bridge port remove [find where interface="ether4"]
+/interface bridge port add bridge="bridge-hotspot" interface="ether4"
+Hapo:
+
+mtu akichomeka cable kwenye ether4, ataenda portal pia
+Usiguse hizi kwa sasa
+
+ether2 kama ndiyo unaitumia kwa LAN ya kawaida
+wlan2 kama ndiyo WiFi ya kawaida ya router yako
+Verify baada ya kubadili
+Run:
+
+/interface bridge port print
+Unatakiwa kuona:
+
+ether3 au ether4 zimehamia bridge-hotspot
+Recommendation yangu ya moja kwa moja
+Anza na:
+
+ether3 tu kwa AP extender
+Commands:
+
+/interface bridge port remove [find where interface="ether3"]
+/interface bridge port add bridge="bridge-hotspot" interface="ether3"
+Baada ya hapo:
+
+connect AP kwenye ether3
+set AP kuwa bridge/AP mode
+test user aki-connect AP WiFi kama anapelekwa portal
+Kwa kifupi:
+
+ndiyo, unaweza kufanya ports za ethernet ziwe guest hotspot
+lakini lazima uzitoe kwanza kwenye bridge ya kawaida
+kisha uzihamishie bridge-hotspot
+Ukifika hapo, naweza kukupa pia settings exact za AP extender ili isiharibu captive portal flow.
+
+
+
+

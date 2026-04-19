@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PortalCustomerBanner } from "@/components/portal/portal-customer-banner";
 import { PortalInlineError } from "@/components/portal/portal-inline-error";
 import { formatMoney } from "@/lib/format";
 
@@ -233,85 +232,86 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
 
   return (
     <div className="space-y-6">
-      <PortalCustomerBanner siteSlug={siteSlug} />
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Pay for access</h1>
-        <p className="mt-2 text-pretty text-sm text-white/75">
-          Keep it simple: choose a plan, enter the phone number that will receive the payment prompt, then confirm payment.
+      <div className="text-center sm:text-left">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">Quick checkout</p>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">Enter phone number</h1>
+        <p className="mt-2 text-pretty text-sm text-white/70">
+          We will send a payment prompt, then connect this device automatically.
         </p>
       </div>
       {detectedMac && (
-        <div className="rounded-xl border border-[var(--portal-accent)]/30 bg-black/25 p-3 text-sm text-white/85">
-          This device was detected automatically. Your hotspot details will be linked in the background.
+        <div className="rounded-2xl border border-[var(--portal-accent)]/20 bg-[var(--portal-accent)]/10 p-3 text-center text-xs text-white/75 sm:text-left">
+          This phone was detected from the hotspot. No customer ID is needed.
         </div>
       )}
-      <Card className="border-white/10 bg-white/5 text-white">
-        <CardHeader>
-          <CardTitle className="text-base font-display">Quick checkout</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={pay} noValidate>
-            {showPlanSelect ? (
-              <div className="space-y-2">
-                <Label htmlFor="portal-plan" className="text-white/85">
-                  Plan <span className="text-rose-300">*</span>
-                </Label>
-                <select
-                  id="portal-plan"
-                  className="flex min-h-11 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--portal-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a2118]"
-                  value={planId}
-                  onChange={(e) => setPlanId(e.target.value)}
-                  required
-                  aria-required="true"
-                >
-                  <option value="">Select a plan…</option>
-                  {plansQ.data?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {formatMoney(p.price_amount, p.currency)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : selected ? (
-              <div className="rounded-xl border border-[var(--portal-accent)]/25 bg-black/25 p-4">
-                <p className="text-xs uppercase tracking-[0.24em] text-white/45">Selected plan</p>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-display text-lg font-semibold text-white">{selected.name}</p>
-                    {selected.description && <p className="mt-1 text-sm text-white/65">{selected.description}</p>}
-                  </div>
-                  <p className="text-lg font-semibold" style={{ color: "var(--portal-accent)" }}>
-                    {formatMoney(selected.price_amount, selected.currency)}
-                  </p>
+      {!checkout && (
+        <Card className="overflow-hidden border-white/10 bg-white/[0.07] text-white shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
+          <CardContent className="p-5 sm:p-6">
+            <form className="space-y-5" onSubmit={pay} noValidate>
+              {showPlanSelect ? (
+                <div className="space-y-2">
+                  <Label htmlFor="portal-plan" className="text-white/85">
+                    Plan <span className="text-rose-300">*</span>
+                  </Label>
+                  <select
+                    id="portal-plan"
+                    className="flex min-h-12 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--portal-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a2118]"
+                    value={planId}
+                    onChange={(e) => setPlanId(e.target.value)}
+                    required
+                    aria-required="true"
+                  >
+                    <option value="">Select a plan...</option>
+                    {plansQ.data?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} - {formatMoney(p.price_amount, p.currency)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              ) : selected ? (
+                <div className="rounded-3xl border border-[var(--portal-accent)]/25 bg-black/20 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-white/40">Selected plan</p>
+                  <div className="mt-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-display text-xl font-bold text-white">{selected.name}</p>
+                      {selected.description && <p className="mt-1 text-sm text-white/58">{selected.description}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display text-2xl font-bold text-[var(--portal-accent)]">
+                        {formatMoney(selected.price_amount, selected.currency).replace("TZS", "").trim()}
+                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-white/45">{selected.currency}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div className="space-y-2">
+                <Label htmlFor="portal-phone" className="text-white/85">
+                  Phone number <span className="text-rose-300">*</span>
+                </Label>
+                <Input
+                  id="portal-phone"
+                  className="min-h-12 rounded-2xl border-white/15 bg-black/25 px-4 text-white"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="07XXXXXXXX"
+                  required
+                />
+                <p className="text-xs text-white/50">The payment prompt will be sent to this number.</p>
               </div>
-            ) : null}
-            <div className="space-y-2">
-              <Label htmlFor="portal-phone" className="text-white/85">
-                Phone number <span className="text-rose-300">*</span>
-              </Label>
-              <Input
-                id="portal-phone"
-                className="min-h-11 border-white/20 bg-black/30 text-white"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                inputMode="tel"
-                placeholder="07XXXXXXXX or 2557XXXXXXXX"
-                required
-              />
-              <p className="text-xs text-white/55">We&apos;ll use this number for the payment prompt.</p>
-            </div>
-            <details className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <summary className="cursor-pointer text-sm font-medium text-white">More options</summary>
-              <div className="mt-4 space-y-4">
+              <details className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                <summary className="cursor-pointer text-sm font-medium text-white/85">More options</summary>
+                <div className="mt-4 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="portal-customer-id" className="text-white/85">
                     Customer ID <span className="text-white/50">(only if staff gave you one)</span>
                   </Label>
                   <Input
                     id="portal-customer-id"
-                    className="min-h-11 border-white/20 bg-black/30 font-mono text-xs text-white placeholder:text-white/40"
+                    className="min-h-11 border-white/15 bg-black/25 font-mono text-xs text-white placeholder:text-white/40"
                     value={customerId}
                     onChange={(e) => setCustomerId(e.target.value)}
                     placeholder="Optional"
@@ -325,7 +325,7 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
                     </Label>
                     <Input
                       id="portal-full-name"
-                      className="min-h-11 border-white/20 bg-black/30 text-white"
+                      className="min-h-11 border-white/15 bg-black/25 text-white"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       autoComplete="name"
@@ -337,7 +337,7 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
                     </Label>
                     <Input
                       id="portal-email"
-                      className="min-h-11 border-white/20 bg-black/30 text-white"
+                      className="min-h-11 border-white/15 bg-black/25 text-white"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -347,22 +347,26 @@ function PortalPayInner({ siteSlug }: { siteSlug: string }) {
                 </div>
               </div>
             </details>
-            <Button
-              type="submit"
-              className="min-h-12 w-full font-semibold text-slate-900"
-              style={{ backgroundColor: "var(--portal-accent)" }}
-              disabled={busy || plansQ.isLoading}
-            >
-              {busy ? "Starting…" : "Pay now"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button
+                type="submit"
+                className="min-h-[3.25rem] w-full rounded-2xl text-base font-bold text-slate-950"
+                style={{ backgroundColor: "var(--portal-accent)" }}
+                disabled={busy || plansQ.isLoading}
+              >
+                {busy ? "Sending prompt..." : "Pay now"}
+              </Button>
+              <Button asChild variant="ghost" className="min-h-11 w-full rounded-2xl text-white/75 hover:bg-white/10 hover:text-white">
+                <Link href={`/${siteSlug}`}>Back to plans</Link>
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {checkout && (
-        <Card className="border-white/10 bg-black/30 text-white">
+        <Card className="border-white/10 bg-white/[0.07] text-white shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
           <CardHeader>
-            <CardTitle className="text-base">Payment started</CardTitle>
+            <CardTitle className="font-display text-xl">Payment in progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4">

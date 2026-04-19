@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PortalCustomerBanner } from "@/components/portal/portal-customer-banner";
 
 export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
   const [code, setCode] = useState("");
@@ -58,21 +57,18 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
 
   return (
     <div className="space-y-6">
-      <PortalCustomerBanner siteSlug={siteSlug} />
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Redeem voucher</h1>
-        <p className="mt-2 text-pretty text-sm text-white/75">Enter the code on your voucher. Only add extra details if staff asked for them.</p>
+      <div className="text-center sm:text-left">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">Voucher access</p>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">Enter voucher code</h1>
+        <p className="mt-2 text-pretty text-sm text-white/70">Use this page only if you already have a voucher or receipt code.</p>
       </div>
       {detectedMac && (
-        <div className="rounded-xl border border-[var(--portal-accent)]/30 bg-black/25 p-3 text-sm text-white/85">
-          This device was detected automatically. We&apos;ll attach the voucher to this hotspot in the background.
+        <div className="rounded-2xl border border-[var(--portal-accent)]/20 bg-[var(--portal-accent)]/10 p-3 text-center text-xs text-white/75 sm:text-left">
+          This phone was detected from the hotspot. The voucher will attach to this device.
         </div>
       )}
-      <Card className="border-white/10 bg-white/5 text-white">
-        <CardHeader>
-          <CardTitle className="text-base font-display">Voucher code</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="border-white/10 bg-white/[0.07] text-white shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
+        <CardContent className="p-5 sm:p-6">
           <form className="space-y-4" onSubmit={redeem}>
             <div className="space-y-2">
               <Label htmlFor="redeem-code" className="text-white/85">
@@ -80,7 +76,7 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
               </Label>
               <Input
                 id="redeem-code"
-                className="min-h-11 border-white/20 bg-black/30 font-mono text-sm text-white uppercase placeholder:normal-case"
+                className="min-h-12 rounded-2xl border-white/15 bg-black/25 px-4 font-mono text-sm uppercase text-white placeholder:normal-case"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 required
@@ -88,8 +84,8 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
                 placeholder="ABCD-1234"
               />
             </div>
-            <details className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <summary className="cursor-pointer text-sm font-medium text-white">PIN or support details</summary>
+            <details className="rounded-2xl border border-white/10 bg-black/15 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-white/85">More options</summary>
               <div className="mt-4 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="redeem-pin" className="text-white/85">
@@ -97,7 +93,7 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
                   </Label>
                   <Input
                     id="redeem-pin"
-                    className="min-h-11 border-white/20 bg-black/30 text-white"
+                    className="min-h-11 border-white/15 bg-black/25 text-white"
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
                     autoComplete="off"
@@ -109,7 +105,7 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
                   </Label>
                   <Input
                     id="redeem-customer"
-                    className="min-h-11 border-white/20 bg-black/30 font-mono text-xs text-white"
+                    className="min-h-11 border-white/15 bg-black/25 font-mono text-xs text-white"
                     value={customerId}
                     onChange={(e) => setCustomerId(e.target.value)}
                     autoComplete="off"
@@ -119,17 +115,17 @@ export function PortalRedeem({ siteSlug }: { siteSlug: string }) {
             </details>
             <Button
               type="submit"
-              className="min-h-12 w-full font-semibold text-slate-900"
+              className="min-h-[3.25rem] w-full rounded-2xl text-base font-bold text-slate-950"
               style={{ backgroundColor: "var(--portal-accent)" }}
               disabled={busy}
             >
-              {busy ? "Applying…" : "Apply voucher"}
+              {busy ? "Applying..." : "Apply voucher"}
             </Button>
           </form>
         </CardContent>
       </Card>
       {result != null && (
-        <Card className="border-white/10 bg-black/30 text-white">
+        <Card className="border-white/10 bg-white/[0.07] text-white">
           <CardHeader>
             <CardTitle className="text-base font-display">Voucher result</CardTitle>
           </CardHeader>
